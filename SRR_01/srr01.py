@@ -6,7 +6,6 @@
 #
 # *************************************** #
 
-
 import nltk
 import numpy as np
 import pandas as pd
@@ -15,6 +14,8 @@ from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
+import random
+import time
 
 # Column names
 COL_query_tokens_in_title = 'query_tokens_in_title'
@@ -22,6 +23,10 @@ COL_query_tokens_in_description = 'query_tokens_in_description'
 COL_query = 'query'
 COL_product_title = 'product_title'
 COL_product_description = 'product_description'
+
+RND_SEED = 1
+RF_TREES = 200
+MIN_SAMPLES_SPLIT = 2
 
 class FeatureMapper:
     def __init__(self, features):
@@ -86,28 +91,40 @@ def extract_features(data):
         if len(description) > 0:
             data.set_value(i, COL_query_tokens_in_description, len(query.intersection(description))/len(description))
 
-#                          Feature Set Name            Data Frame Column                Transformer
-features = FeatureMapper([('QueryBagOfWords',          COL_query,                       CountVectorizer(max_features=200)),
-                          ('TitleBagOfWords',          COL_product_title,               CountVectorizer(max_features=200)),
-                          ('DescriptionBagOfWords',    COL_product_description,         CountVectorizer(max_features=200)),
-                          ('QueryTokensInTitle',       COL_query_tokens_in_title,       SimpleTransform()),
-                          ('QueryTokensInDescription', COL_query_tokens_in_description, SimpleTransform())])
+if __name__ == '__main__':
 
-train = pd.read_csv("../input/train.csv").fillna("")
-test = pd.read_csv("../input/test.csv").fillna("")
+    start = time.time()
+    random.seed(RND_SEED)
 
-extract_features(train)
-extract_features(test)
+    #                          Feature Set Name            Data Frame Column                Transformer
+    features = FeatureMapper([('QueryBagOfWords',          COL_query,                       CountVectorizer(max_features=200)),
+                              ('TitleBagOfWords',          COL_product_title,               CountVectorizer(max_features=200)),
+                              ('DescriptionBagOfWords',    COL_product_description,         CountVectorizer(max_features=200)),
+                              ('QueryTokensInTitle',       COL_query_tokens_in_title,       SimpleTransform()),
+                              ('QueryTokensInDescription', COL_query_tokens_in_description, SimpleTransform())])
 
-pipeline = Pipeline([("extract_features", features),
-                     ("classify", RandomForestClassifier(n_estimators=200,
-                                                         n_jobs=1,
-                                                         min_samples_split=2,
-                                                         random_state=1))])
+    print "Reading files..."
+    train = pd.read_csv("../input/train.csv").fillna("")
+    test = pd.read_csv("../input/test.csv").fillna("")
 
-pipeline.fit(train, train["median_relevance"])
+    print "Extracting features..."
+    extract_features(train)
+    extract_features(test)
 
-predictions = pipeline.predict(test)
+    pipeline = Pipeline([("extract_features", features),
+                         ("classify", RandomForestClassifier(n_estimators=RF_TREES,
+                                                             n_jobs=1,
+                                                             min_samples_split=MIN_SAMPLES_SPLIT,
+                                                             random_state=RND_SEED))])
 
-submission = pd.DataFrame({"id": test["id"], "prediction": predictions})
-submission.to_csv("python_benchmark.csv", index=False)
+    print "Fitting model..."
+    pipeline.fit(train, train["median_relevance"])
+
+    print "Predicting ..."
+    predictions = pipeline.predict(test)
+
+    print "Writing out data ..."
+    submission = pd.DataFrame({"id": test["id"], "prediction": predictions})
+    submission.to_csv("python_benchmark.csv", index=False)
+
+    print "Done. Elapsed:", time.time() - start
