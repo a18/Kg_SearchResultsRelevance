@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+# *************************************** #
+#  Search Results Relevance @ Kaggle
 #  Author: https://www.kaggle.com/benhamner/crowdflower-search-relevance/python-benchmark
 #  Date: 2015-06-24
-#  Modified by: andy1618@mail.ru
+#  Modified by: andy1618
 #
 # *************************************** #
 
