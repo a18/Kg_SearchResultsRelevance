@@ -16,8 +16,12 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 
-train = pd.read_csv("../input/train.csv").fillna("")
-test  = pd.read_csv("../input/test.csv").fillna("")
+# Column names
+COL_query_tokens_in_title = 'query_tokens_in_title'
+COL_query_tokens_in_description = 'query_tokens_in_description'
+COL_query = 'query'
+COL_product_title = 'product_title'
+COL_product_description = 'product_description'
 
 class FeatureMapper:
     def __init__(self, features):
@@ -69,25 +73,28 @@ class SimpleTransform(BaseEstimator):
     def transform(self, X, y=None):
         return np.array([self.transformer(x) for x in X], ndmin=2).T
 
-#                          Feature Set Name            Data Frame Column              Transformer
-features = FeatureMapper([('QueryBagOfWords',          'query',                       CountVectorizer(max_features=200)),
-                          ('TitleBagOfWords',          'product_title',               CountVectorizer(max_features=200)),
-                          ('DescriptionBagOfWords',    'product_description',         CountVectorizer(max_features=200)),
-                          ('QueryTokensInTitle',       'query_tokens_in_title',       SimpleTransform()),
-                          ('QueryTokensInDescription', 'query_tokens_in_description', SimpleTransform())])
-
 def extract_features(data):
-    token_pattern = re.compile(r"(?u)\b\w\w+\b")
-    data["query_tokens_in_title"] = 0.0
-    data["query_tokens_in_description"] = 0.0
+    token_pattern = re.compile(r"(?u)\b\w\w+\b") # 2+ words
+    data[COL_query_tokens_in_title] = 0.0
+    data[COL_query_tokens_in_description] = 0.0
     for i, row in data.iterrows():
-        query = set(x.lower() for x in token_pattern.findall(row["query"]))
-        title = set(x.lower() for x in token_pattern.findall(row["product_title"]))
-        description = set(x.lower() for x in token_pattern.findall(row["product_description"]))
+        query = set(x.lower() for x in token_pattern.findall(row[COL_query]))
+        title = set(x.lower() for x in token_pattern.findall(row[COL_product_title]))
+        description = set(x.lower() for x in token_pattern.findall(row[COL_product_description]))
         if len(title) > 0:
-            data.set_value(i, "query_tokens_in_title", len(query.intersection(title))/len(title))
+            data.set_value(i, COL_query_tokens_in_title, len(query.intersection(title))/len(title))
         if len(description) > 0:
-            data.set_value(i, "query_tokens_in_description", len(query.intersection(description))/len(description))
+            data.set_value(i, COL_query_tokens_in_description, len(query.intersection(description))/len(description))
+
+#                          Feature Set Name            Data Frame Column                Transformer
+features = FeatureMapper([('QueryBagOfWords',          COL_query,                       CountVectorizer(max_features=200)),
+                          ('TitleBagOfWords',          COL_product_title,               CountVectorizer(max_features=200)),
+                          ('DescriptionBagOfWords',    COL_product_description,         CountVectorizer(max_features=200)),
+                          ('QueryTokensInTitle',       COL_query_tokens_in_title,       SimpleTransform()),
+                          ('QueryTokensInDescription', COL_query_tokens_in_description, SimpleTransform())])
+
+train = pd.read_csv("../input/train.csv").fillna("")
+test = pd.read_csv("../input/test.csv").fillna("")
 
 extract_features(train)
 extract_features(test)
