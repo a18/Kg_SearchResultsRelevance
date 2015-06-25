@@ -127,6 +127,6 @@ if __name__ == '__main__':
 
     print "Writing out data ..."
     submission = pd.DataFrame({"id": test["id"], "prediction": predictions})
-    submission.to_csv("python_benchmark.csv", index=False)
+    submission.to_csv("_out/python_benchmark.csv", index=False)
 
     print "Done. Elapsed:", time.time() - start

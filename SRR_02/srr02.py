@@ -10,6 +10,7 @@
 #  Modified by: andy1618
 #
 # *************************************** #
+import random
 
 import pandas as pd
 import numpy as np
@@ -30,6 +31,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_extraction import text
+import time
+
+RND_SEED = 1
+
 # array declarations
 sw=[]
 s_data = []
@@ -132,10 +137,15 @@ def quadratic_weighted_kappa(y, y_pred):
 
 if __name__ == '__main__':
 
-    # Load the training file
+    start = time.time()
+    random.seed(RND_SEED)
+
+    print "=== Phase1 === ..."
+    print "Loading the data ..."
     train = pd.read_csv('../input/train.csv')
     test = pd.read_csv('../input/test.csv')
     
+    print "Cleaning the data ..."
     # we dont need ID columns
     idx = test.id.values.astype(int)
     train = train.drop('id', axis=1)
@@ -155,6 +165,7 @@ if __name__ == '__main__':
             ngram_range=(1, 2), use_idf=1,smooth_idf=1,sublinear_tf=1,
             stop_words = 'english')
     
+    print "Fitting TfidfVectorizer ..."
     # Fit TFIDF
     tfv.fit(traindata)
     X =  tfv.transform(traindata) 
@@ -175,8 +186,8 @@ if __name__ == '__main__':
                     	     ('svm', svm_model)])
     
     # Create a parameter grid to search for best parameters for everything in the pipeline
-    param_grid = {'svd__n_components' : [400],
-                  'svm__C': [10]}
+    param_grid = {'svd__n_components' : [200, 400],
+                  'svm__C': [5, 10]}
     
     # Kappa Scorer 
     kappa_scorer = metrics.make_scorer(quadratic_weighted_kappa, greater_is_better = True)
@@ -185,25 +196,33 @@ if __name__ == '__main__':
     model = grid_search.GridSearchCV(estimator = clf, param_grid=param_grid, scoring=kappa_scorer,
                                      verbose=10, n_jobs=-1, iid=True, refit=True, cv=2)
                                      
+    print "Fitting GridSearchCV ..."
     # Fit Grid Search Model
     model.fit(X, y)
     print("Best score: %0.3f" % model.best_score_)
     print("Best parameters set:")
     best_parameters = model.best_estimator_.get_params()
     for param_name in sorted(param_grid.keys()):
-    	print("\t%s: %r" % (param_name, best_parameters[param_name]))
+        print("\t%s: %r" % (param_name, best_parameters[param_name]))
     
     # Get best model
     best_model = model.best_estimator_
     
+    print "Fitting best model for train data ..."
     # Fit model with best parameters optimized for quadratic_weighted_kappa
     best_model.fit(X,y)
+    print "Making predictions ..."
     preds = best_model.predict(X_test)
-    
-    #load data
+    print "...done. Partial elapsed time for Phase1:", time.time() - start
+
+
+
+    print "=== Phase2 === ..."
+    print "Loading the data ..."
     train = pd.read_csv("../input/train.csv").fillna("")
     test  = pd.read_csv("../input/test.csv").fillna("")
     
+    print "Cleaning and stemming ..."
     #remove html, remove non text or numeric, make query and title unique features for counts using prefix (accounted for in stopwords tweak)
     stemmer = PorterStemmer()
     ## Stemming functionality
@@ -233,14 +252,19 @@ if __name__ == '__main__':
         s=re.sub("[^a-zA-Z0-9]"," ", s)
         s= (" ").join([stemmer.stem(z) for z in s.split(" ")])
         t_data.append(s)
+
     #create sklearn pipeline, fit all, and predit test data
     clf = Pipeline([('v',TfidfVectorizer(min_df=5, max_df=500, max_features=None, strip_accents='unicode', analyzer='word', token_pattern=r'\w{1,}', ngram_range=(1, 2), use_idf=True, smooth_idf=True, sublinear_tf=True, stop_words = 'english')), 
     ('svd', TruncatedSVD(n_components=200, algorithm='randomized', n_iter=5, random_state=None, tol=0.0)), 
     ('scl', StandardScaler(copy=True, with_mean=True, with_std=True)), 
     ('svm', SVC(C=10.0, kernel='rbf', degree=3, gamma=0.0, coef0=0.0, shrinking=True, probability=False, tol=0.001, cache_size=200, class_weight=None, verbose=False, max_iter=-1, random_state=None))])
+
+    print "Fitting model for train data ..."
     clf.fit(s_data, s_labels)
+    print "Predicting test data ..."
     t_labels = clf.predict(t_data)
     
+    print "Calculating final scores ..."
     import math
     p3 = []
     for i in range(len(preds)):
@@ -258,4 +282,6 @@ if __name__ == '__main__':
 
     # Create your first submission file
     submission = pd.DataFrame({"id": idx, "prediction": p3})
-    submission.to_csv("beating_the_benchmark_yet_again.csv", index=False)
+    submission.to_csv("_out/beating_the_benchmark_yet_again.csv", index=False)
+
+    print "Done. Elapsed:", time.time() - start
